@@ -121,11 +121,17 @@ private fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(
-            "QR-генератор",
+            "Генератор билетов",
             fontSize = 34.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black,
             modifier = Modifier.padding(top = 24.dp),
+        )
+
+        Text(
+            "Введите данные для генерации QR-кода и настройки подписи.",
+            color = Gray,
+            fontSize = 15.sp,
         )
 
         OutlinedTextField(
@@ -160,7 +166,7 @@ private fun HomeScreen(
             if (loading) {
                 CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
             } else {
-                Text("Создать QR-код", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text("Сформировать билет", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         if (error != null) Text(error, color = Warn, fontSize = 14.sp)
@@ -203,9 +209,9 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text("Билет Avtobys. Оплата проезда", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+            Text("Билет Avtobys", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
             Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Green, modifier = Modifier.size(60.dp))
-            Text("Ваш платеж принят", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+            Text("Оплата подтверждена", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
         }
 
         val cardShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -273,12 +279,12 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                     .background(Color.White),
             )
 
-            // Здесь теперь отображается ваша введенная подпись
+            // Пользовательский текст под QR-кодом в строгом оформлении
             Text(
                 text = ticket.customCaption,
-                fontSize = lerp(12.sp, 14.sp, t),
+                fontSize = lerp(14.sp, 16.sp, t),
                 color = Color.Black,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 24.dp, start = 16.dp, end = 16.dp),
             )
