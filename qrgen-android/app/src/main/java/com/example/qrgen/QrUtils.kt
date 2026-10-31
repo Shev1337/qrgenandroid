@@ -50,11 +50,6 @@ fun renderReceipt(ticket: Ticket, dateText: String, qr: Bitmap): Bitmap {
     p.typeface = Typeface.DEFAULT_BOLD
     p.textSize = 56f
     c.drawText("Билет Avtobys. Оплата проезда", cx, 160f, p)
-
-    p.color = Color.rgb(200, 0, 0)
-    p.textSize = 44f
-    c.drawText("ДЕМО · не является платёжным документом", cx, 240f, p)
-
     val side = 700
     val left = (w - side) / 2
     c.drawBitmap(qr, null, Rect(left, 320, left + side, 320 + side), null)
@@ -62,9 +57,9 @@ fun renderReceipt(ticket: Ticket, dateText: String, qr: Bitmap): Bitmap {
     p.color = Color.BLACK
     p.typeface = Typeface.DEFAULT
     p.textSize = 40f
-    c.drawText("Демо-билет № ${ticket.id}", cx, 1100f, p)
+    c.drawText("Покажите QR-код контроллеру", cx, 1100f, p)
     c.drawText(dateText, cx, 1170f, p)
-    c.drawText("Сумма ${ticket.amountTenge} ₸", cx, 1240f, p)
+    c.drawText("Сумма 80 ₸", cx, 1240f, p)
     return bmp
 }
 
