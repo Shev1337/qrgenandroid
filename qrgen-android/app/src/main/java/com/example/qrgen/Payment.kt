@@ -51,25 +51,23 @@ sealed interface UiState {
     data class Error(val message: String) : UiState
 }
 
-class TicketViewModel : ViewModel() {
-    private val repo: PaymentRepository = FakePaymentRepository()
-
-    var state: UiState by mutableStateOf(UiState.Idle)
+class TicketViewModel : androidx.lifecycle.ViewModel() {
+    var state by androidx.compose.runtime.mutableStateOf<UiState>(UiState.Idle)
         private set
 
-    /** Создание билета с кастомными данными из полей ввода */
     fun payCustom(link: String, caption: String) {
-        val id = UUID.randomUUID().toString().take(8).uppercase()
         state = UiState.Ready(
             Ticket(
-                id = id,
-                issuedAtMillis = System.currentTimeMillis(),
-                amountTenge = 80,
-                token = link.ifBlank { "https://avtobys.kz" },
-                customCaption = caption.ifBlank { "КОНТРОЛЛЕРУ №42" }
+                token = link,
+                customCaption = caption
             )
         )
     }
+
+    fun close() {
+        state = UiState.Idle
+    }
+}
 
     /** Стандартный процесс оплаты через репозиторий */
     fun pay() {
