@@ -40,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
@@ -86,11 +87,18 @@ fun QRGenTheme(content: @Composable () -> Unit) {
 @Composable
 fun TicketApp(vm: TicketViewModel = viewModel()) {
     val state = vm.state
+    var inputLink by remember { mutableStateOf("https://avtobys.kz") }
+    var inputCaption by remember { mutableStateOf("КОНТРОЛЛЕРУ №42") }
+
     Box(Modifier.fillMaxSize().background(Color.White)) {
         HomeScreen(
             loading = state is UiState.Loading,
             error = (state as? UiState.Error)?.message,
-            onPay = vm::pay,
+            link = inputLink,
+            onLinkChange = { inputLink = it },
+            caption = inputCaption,
+            onCaptionChange = { inputCaption = it },
+            onPay = { vm.payCustom(inputLink, inputCaption) },
         )
         if (state is UiState.Ready) {
             TicketOverlay(ticket = state.ticket, onClose = vm::close)
@@ -99,34 +107,48 @@ fun TicketApp(vm: TicketViewModel = viewModel()) {
 }
 
 @Composable
-private fun HomeScreen(loading: Boolean, error: String?, onPay: () -> Unit) {
+private fun HomeScreen(
+    loading: Boolean,
+    error: String?,
+    link: String,
+    onLinkChange: (String) -> Unit,
+    caption: String,
+    onCaptionChange: (String) -> Unit,
+    onPay: () -> Unit,
+) {
     Column(
         Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(
-            "Билет Avtobys",
+            "QR-генератор",
             fontSize = 34.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black,
             modifier = Modifier.padding(top = 24.dp),
         )
-        Surface(color = Color(0xFFFFF3CD), shape = RoundedCornerShape(10.dp)) {
-            Text(
-                "ДЕМО-МАКЕТ · сервер не подключён · билет не действителен для проезда",
-                fontSize = 13.sp,
-                color = Color(0xFF664D03),
-                modifier = Modifier.padding(12.dp),
-            )
-        }
-        Text(
-            "Нажмите кнопку, чтобы пройти тестовый сценарий оплаты и увидеть демо-билет с QR-кодом.",
-            color = Gray,
-            fontSize = 15.sp,
+
+        OutlinedTextField(
+            value = link,
+            onValueChange = onLinkChange,
+            label = { Text("Ссылка / Данные для QR-кода") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            singleLine = true
         )
+
+        OutlinedTextField(
+            value = caption,
+            onValueChange = onCaptionChange,
+            label = { Text("Текст под QR-кодом") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            singleLine = true
+        )
+
         Button(
             onClick = onPay,
-            enabled = !loading,
+            enabled = !loading && link.isNotBlank(),
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
@@ -138,7 +160,7 @@ private fun HomeScreen(loading: Boolean, error: String?, onPay: () -> Unit) {
             if (loading) {
                 CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
             } else {
-                Text("Оплатить проезд — 80 ₸ (демо)", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text("Создать QR-код", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         if (error != null) Text(error, color = Warn, fontSize = 14.sp)
@@ -183,7 +205,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
         ) {
             Text("Билет Avtobys. Оплата проезда", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
             Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Green, modifier = Modifier.size(60.dp))
-            Text("Тестовый платёж принят (демо)", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+            Text("Ваш платеж принят", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
         }
 
         val cardShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -229,7 +251,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "ДЕМО · №${ticket.id}",
+                    "Билет №${ticket.id}",
                     fontSize = lerp(18.sp, 22.sp, t),
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
@@ -244,17 +266,19 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
             Image(
                 bitmap = qrImage,
-                contentDescription = "Демо QR-код билета",
+                contentDescription = "QR-код билета",
                 filterQuality = FilterQuality.None,
                 modifier = Modifier
                     .size(lerp(220.dp, minOf(330.dp, width - 56.dp), t))
                     .background(Color.White),
             )
 
+            // Здесь теперь отображается ваша введенная подпись
             Text(
-                "Тестовый QR-код. Для проезда не действителен.",
+                text = ticket.customCaption,
                 fontSize = lerp(12.sp, 14.sp, t),
-                color = Warn,
+                color = Color.Black,
+                fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 24.dp, start = 16.dp, end = 16.dp),
             )
@@ -280,7 +304,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                 ActionButton(Icons.Filled.Share, "Поделиться") {
                     val send = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "Демо-билет Avtobys №${ticket.id}: ${ticket.token}")
+                        putExtra(Intent.EXTRA_TEXT, "Билет Avtobys №${ticket.id}: ${ticket.token}")
                     }
                     context.startActivity(Intent.createChooser(send, null))
                 }
