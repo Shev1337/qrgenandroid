@@ -17,6 +17,7 @@ data class Ticket(
     val amountTenge: Int,
     /** Содержимое QR-кода. В боевой версии это подписанный токен от сервера. */
     val token: String,
+    val customCaption: String
 )
 
 /**
@@ -56,6 +57,19 @@ class TicketViewModel : ViewModel() {
 
     var state: UiState by mutableStateOf(UiState.Idle)
         private set
+
+    fun payCustom(link: String, caption: String) {
+        state = UiState.Ready(
+            Ticket(
+                token = link,
+                customCaption = caption
+            )
+        )
+    }
+
+    fun close() {
+        state = UiState.Idle
+    }
 
     fun pay() {
         if (state is UiState.Loading) return
