@@ -17,7 +17,7 @@ data class Ticket(
     val amountTenge: Int = 80,
     /** Содержимое QR-кода (ссылка или токен). */
     val token: String,
-    val customCaption: String = "КОНТРОЛЛЕРУ №42"
+    val customCaption: String = "Номер автобуса"
 )
 
 /**
@@ -39,7 +39,7 @@ class FakePaymentRepository : PaymentRepository {
             issuedAtMillis = now,
             amountTenge = 80,
             token = "https://avtobys.kz/ticket/$id",
-            customCaption = "КОНТРОЛЛЕРУ №42"
+            customCaption = "Номер автобуса"
         )
     }
 }
@@ -51,23 +51,25 @@ sealed interface UiState {
     data class Error(val message: String) : UiState
 }
 
-class TicketViewModel : androidx.lifecycle.ViewModel() {
-    var state by androidx.compose.runtime.mutableStateOf<UiState>(UiState.Idle)
+class TicketViewModel : ViewModel() {
+    private val repo: PaymentRepository = FakePaymentRepository()
+
+    var state: UiState by mutableStateOf(UiState.Idle)
         private set
 
+    /** Создание билета с кастомными данными из полей ввода */
     fun payCustom(link: String, caption: String) {
+        val id = UUID.randomUUID().toString().take(8).uppercase()
         state = UiState.Ready(
             Ticket(
-                token = link,
-                customCaption = caption
+                id = id,
+                issuedAtMillis = System.currentTimeMillis(),
+                amountTenge = 80,
+                token = link.ifBlank { "https://avtobys.kz" },
+                customCaption = caption.ifBlank { "Номер автобуса" }
             )
         )
     }
-
-    fun close() {
-        state = UiState.Idle
-    }
-}
 
     /** Стандартный процесс оплаты через репозиторий */
     fun pay() {
