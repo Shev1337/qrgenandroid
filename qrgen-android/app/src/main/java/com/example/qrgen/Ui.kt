@@ -89,7 +89,7 @@ fun QRGenTheme(content: @Composable () -> Unit) {
 fun TicketApp(vm: TicketViewModel = viewModel()) {
     val state = vm.state
     var inputLink by remember { mutableStateOf("https://avtobys.kz") }
-    var inputCaption by remember { mutableStateOf("КОНТРОЛЛЕРУ №42") }
+    var inputCaption by remember { mutableStateOf("Номер автобуса") }
 
     Box(Modifier.fillMaxSize().background(Color.White)) {
         HomeScreen(
@@ -217,9 +217,9 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text("Билет Avtobys", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+            Text("Билет Avtobys. Оплата проезда", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
             Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Green, modifier = Modifier.size(60.dp))
-            Text("Оплата подтверждена", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+            Text("Ваш платеж принят", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
         }
 
         val cardShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -265,7 +265,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Билет №${ticket.id}",
+                    "Покажите QR-код контроллеру",
                     fontSize = lerp(18.sp, 22.sp, t),
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
@@ -289,6 +289,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
             Text(
                 text = ticket.customCaption,
+                
                 fontSize = lerp(14.sp, 16.sp, t),
                 color = Color.Black,
                 fontWeight = FontWeight.Bold,
