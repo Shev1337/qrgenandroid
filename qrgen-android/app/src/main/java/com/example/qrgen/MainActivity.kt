@@ -158,7 +158,6 @@ private fun HomeScreen(
 
         Button(
             onClick = {
-                // Прячем клавиатуру и снимаем фокус с полей ввода
                 focusManager.clearFocus()
                 keyboardController?.hide()
                 onPay()
@@ -284,7 +283,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                 filterQuality = FilterQuality.None,
                 modifier = Modifier
                     .size(lerp(220.dp, minOf(330.dp, width - 56.dp), t))
-                    .background(Color.White),
+                    .background(Color.white),
             )
 
             Text(
