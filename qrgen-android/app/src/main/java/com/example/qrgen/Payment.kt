@@ -10,29 +10,27 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-/** Билет, который возвращает бэкенд после оплаты. */
+/** Билет, который отображается в приложении. */
 data class Ticket(
-    val id: String,
-    val issuedAtMillis: Long,
-    val amountTenge: Int,
-    /** Содержимое QR-кода. В боевой версии это подписанный токен от сервера. */
+    val id: String = UUID.randomUUID().toString().take(8).uppercase(),
+    val issuedAtMillis: Long = System.currentTimeMillis(),
+    val amountTenge: Int = 80,
+    /** Содержимое QR-кода (ссылка или токен). */
     val token: String,
-    val customCaption: String
+    val customCaption: String = "КОНТРОЛЛЕРУ №42"
 )
 
 /**
- * Единственная точка, которую нужно заменить при подключении сервера:
- * реализация должна обратиться к платёжному API и вернуть билет с токеном,
- * подписанным на стороне сервера. Приложение само билеты не выдаёт.
+ * Интерфейс репозитория оплаты.
  */
 interface PaymentRepository {
     suspend fun pay(): Ticket
 }
 
-/** Заглушка для макета: ничего не оплачивает, токен явно помечен как DEMO. */
+/** Заглушка для репозитория. */
 class FakePaymentRepository : PaymentRepository {
     override suspend fun pay(): Ticket {
-        delay(700) // имитация сетевого запроса
+        delay(500) // имитация сетевого запроса
         val id = UUID.randomUUID().toString().take(8).uppercase()
         val now = System.currentTimeMillis()
         val expires = now + 15 * 60 * 1000L
@@ -40,7 +38,8 @@ class FakePaymentRepository : PaymentRepository {
             id = id,
             issuedAtMillis = now,
             amountTenge = 80,
-            token = "DEMO-TICKET:$id:$expires",
+            token = "https://avtobys.kz/ticket/$id",
+            customCaption = "КОНТРОЛЛЕРУ №42"
         )
     }
 }
@@ -58,19 +57,21 @@ class TicketViewModel : ViewModel() {
     var state: UiState by mutableStateOf(UiState.Idle)
         private set
 
+    /** Создание билета с кастомными данными из полей ввода */
     fun payCustom(link: String, caption: String) {
+        val id = UUID.randomUUID().toString().take(8).uppercase()
         state = UiState.Ready(
             Ticket(
-                token = link,
-                customCaption = caption
+                id = id,
+                issuedAtMillis = System.currentTimeMillis(),
+                amountTenge = 80,
+                token = link.ifBlank { "https://avtobys.kz" },
+                customCaption = caption.ifBlank { "КОНТРОЛЛЕРУ №42" }
             )
         )
     }
 
-    fun close() {
-        state = UiState.Idle
-    }
-
+    /** Стандартный процесс оплаты через репозиторий */
     fun pay() {
         if (state is UiState.Loading) return
         state = UiState.Loading
@@ -85,6 +86,7 @@ class TicketViewModel : ViewModel() {
         }
     }
 
+    /** Сброс состояния (закрытие карточки билета) */
     fun close() {
         state = UiState.Idle
     }
