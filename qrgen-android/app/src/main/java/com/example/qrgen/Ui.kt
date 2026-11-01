@@ -412,12 +412,10 @@ private fun ScannerView(onScanResult: (String) -> Unit, onClose: () -> Unit) {
                 .statusBarsPadding()
                 .padding(16.dp)
                 .align(Alignment.TopEnd)
-                .background(Color.Black.Companion.let { Color.Black.copy(alpha = 0.5f) }, CircleShape)
+                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Закрыть сканер", tint = Color.White)
         }
-    }
-}
 
 @OptIn(ExperimentalGetImage::class)
 private fun processImageProxy(imageProxy: ImageProxy, onDetected: (String) -> Unit) {
