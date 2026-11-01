@@ -538,7 +538,6 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
             Image(
                 bitmap = qrImage,
                 contentDescription = "QR-код билета",
-                filterQuality = FilterQuality.None,
                 modifier = Modifier
                     .size(lerp(200.dp, minOf(300.dp, width - 56.dp), t))
                     .background(Color.White),
