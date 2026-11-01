@@ -65,7 +65,6 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -74,7 +73,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -182,7 +180,6 @@ fun TicketApp(vm: TicketViewModel = viewModel()) {
             )
         }
 
-        // Диалог подтверждения при сканировании уже известного QR-кода
         vm.pendingMatchItem?.let { matchItem ->
             AlertDialog(
                 onDismissRequest = { vm.dismissPendingMatch() },
@@ -247,7 +244,6 @@ private fun HomeScreen(
             modifier = Modifier.padding(top = 16.dp),
         )
 
-        // Поле ссылки с кнопкой сканера внутри/рядом
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -416,6 +412,8 @@ private fun ScannerView(onScanResult: (String) -> Unit, onClose: () -> Unit) {
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Закрыть сканер", tint = Color.White)
         }
+    }
+}
 
 @OptIn(ExperimentalGetImage::class)
 private fun processImageProxy(imageProxy: ImageProxy, onDetected: (String) -> Unit) {
@@ -455,7 +453,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
     var expanded by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
-    var drag by remember { mutableFloatStateOf(0f) }
+    var drag by remember { mutableStateOf(0f) }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Backdrop)) {
         val full = maxHeight
