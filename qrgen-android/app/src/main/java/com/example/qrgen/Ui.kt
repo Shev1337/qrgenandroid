@@ -457,14 +457,14 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
     var expanded by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
-    var drag by remember { mutableFloatStateOf(0f) }
+    var dragOffset by remember { mutableStateOf(0f) }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Backdrop)) {
         val full = maxHeight
         val width = maxWidth
         val collapsedH = full * 0.8f
         val baseH = if (expanded) full else collapsedH
-        val dragDp = with(LocalDensity.current) { drag.toDp() }
+        val dragDp = with(LocalDensity.current) { dragOffset.toDp() }
         val targetH = (baseH - dragDp).coerceIn(full * 0.5f, full)
         val h by animateDpAsState(
             targetValue = if (dragging) targetH else baseH,
@@ -496,7 +496,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                         onDragStart = { dragging = true },
                         onDragEnd = {
                             dragging = false
-                            val dy = drag
+                            val dy = dragOffset
                             if (expanded) {
                                 if (dy > 100.dp.toPx()) expanded = false
                             } else if (dy < -50.dp.toPx()) {
@@ -504,12 +504,12 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                             } else if (dy > 130.dp.toPx()) {
                                 onClose()
                             }
-                            drag = 0f
+                            dragOffset = 0f
                         },
-                        onDragCancel = { dragging = false; drag = 0f },
+                        onDragCancel = { dragging = false; dragOffset = 0f },
                         onVerticalDrag = { change, amount ->
                             change.consume()
-                            drag += amount
+                            dragOffset += amount
                         },
                     )
                 }
