@@ -6,10 +6,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -35,14 +31,12 @@ interface PaymentRepository {
 
 class FakePaymentRepository : PaymentRepository {
     override suspend fun pay(): Ticket {
-        delay(300)
         val id = UUID.randomUUID().toString().take(8).uppercase()
-        val now = System.currentTimeMillis()
         return Ticket(
             id = id,
-            issuedAtMillis = now,
+            issuedAtMillis = System.currentTimeMillis(),
             amountTenge = 80,
-            token = "https://avtobys.kz/ticket/$id",
+            token = "https://avtobys.kz/ticket/$id?rnd=${UUID.randomUUID().toString().take(6)}",
             customCaption = "721BG04"
         )
     }
@@ -56,7 +50,6 @@ sealed interface UiState {
 }
 
 class TicketViewModel(application: Application) : AndroidViewModel(application) {
-    private val repo: PaymentRepository = FakePaymentRepository()
     private val prefs = application.getSharedPreferences("qr_prefs", Context.MODE_PRIVATE)
 
     var state: UiState by mutableStateOf(UiState.Idle)
@@ -65,7 +58,6 @@ class TicketViewModel(application: Application) : AndroidViewModel(application) 
     var savedItems: List<SavedItem> by mutableStateOf(loadSavedItems())
         private set
 
-    // Состояние для диалога подтверждения при сканировании существующего QR
     var pendingMatchItem: SavedItem? by mutableStateOf(null)
         private set
 
@@ -108,12 +100,11 @@ class TicketViewModel(application: Application) : AndroidViewModel(application) 
         if (link.isBlank()) return
         val newItem = SavedItem(link = link, caption = caption, title = title)
         val list = savedItems.filter { it.link != link }.toMutableList()
-        list.add(0, newItem)
+        list.add(0, newItem) // Свежие сверху
         persistItems(list)
     }
 
     fun deleteItem(id: String) {
-        val list = savedItems.filter { id != id } // wait, fixed below: it.id != id
         persistItems(savedItems.filter { it.id != id })
     }
 
@@ -123,17 +114,12 @@ class TicketViewModel(application: Application) : AndroidViewModel(application) 
         persistItems(list)
     }
 
-    /** Обработка отсканированного QR-кода */
     fun handleScannedLink(scannedLink: String, currentCaption: String, currentTitle: String, onOpenCard: (String, String, String) -> Unit) {
         val existing = savedItems.firstOrNull { it.link == scannedLink }
         if (existing != null) {
-            // Если такой QR уже есть в истории — показываем диалог подтверждения
             pendingMatchItem = existing
         } else {
-            // Если новый — если были введены данные, сохраняем, и открываем
-            if (currentCaption.isNotBlank() || currentTitle.isNotBlank()) {
-                saveCurrent(scannedLink, currentCaption, currentTitle)
-            }
+            saveCurrent(scannedLink, currentCaption, currentTitle)
             onOpenCard(scannedLink, currentCaption, currentTitle)
         }
     }
@@ -152,13 +138,20 @@ class TicketViewModel(application: Application) : AndroidViewModel(application) 
 
     fun payCustom(link: String, caption: String, title: String = "") {
         saveCurrent(link, caption, title)
-        val id = UUID.randomUUID().toString().take(8).uppercase()
+        val uniqueId = UUID.randomUUID().toString().uppercase()
+        // Делаем каждый раз новый уникальный URL/токен, чтобы QR-код менялся
+        val uniqueToken = if (link.contains("?")) {
+            "$link&ticket_id=$uniqueId"
+        } else {
+            "$link?ticket_id=$uniqueId"
+        }
+
         state = UiState.Ready(
             Ticket(
-                id = id,
+                id = uniqueId.take(8),
                 issuedAtMillis = System.currentTimeMillis(),
                 amountTenge = 80,
-                token = link.ifBlank { "https://avtobys.kz" },
+                token = uniqueToken,
                 customCaption = caption.ifBlank { "721BG04" }
             )
         )
