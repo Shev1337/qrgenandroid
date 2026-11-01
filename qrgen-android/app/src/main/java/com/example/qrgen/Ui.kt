@@ -89,7 +89,7 @@ fun QRGenTheme(content: @Composable () -> Unit) {
 fun TicketApp(vm: TicketViewModel = viewModel()) {
     val state = vm.state
     var inputLink by remember { mutableStateOf("https://avtobys.kz") }
-    var inputCaption by remember { mutableStateOf("Номер автобуса") }
+    var inputCaption by remember { mutableStateOf("721BG04") }
 
     Box(Modifier.fillMaxSize().background(Color.White)) {
         HomeScreen(
@@ -158,7 +158,6 @@ private fun HomeScreen(
 
         Button(
             onClick = {
-                // Принудительно убираем клавиатуру и фокус при генерации
                 focusManager.clearFocus()
                 keyboardController?.hide()
                 onPay()
@@ -212,6 +211,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
         )
         val t = ((h - collapsedH) / (full - collapsedH)).coerceIn(0f, 1f)
 
+        // Верхний блок с галочкой (как на скрине)
         Column(
             Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -255,6 +255,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Ручка шторки
             Box(
                 Modifier
                     .padding(top = 8.dp, bottom = 2.dp)
@@ -263,10 +264,11 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                     .clickable { expanded = !expanded },
             )
 
+            // Заголовок карточки с крестиком
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Покажите QR-код контроллеру",
-                    fontSize = lerp(18.sp, 22.sp, t),
+                    fontSize = lerp(16.sp, 20.sp, t),
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
                     modifier = Modifier.weight(1f),
@@ -278,27 +280,38 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
             Spacer(Modifier.weight(1f))
 
+            // Сам QR-код
             Image(
                 bitmap = qrImage,
                 contentDescription = "QR-код билета",
                 filterQuality = FilterQuality.None,
                 modifier = Modifier
-                    .size(lerp(220.dp, minOf(330.dp, width - 56.dp), t))
+                    .size(lerp(200.dp, minOf(300.dp, width - 56.dp), t))
                     .background(Color.White),
             )
 
+            // Мелкая серая надпись под QR-кодом
+            Text(
+                text = "Покажите QR-код контроллеру",
+                fontSize = lerp(12.sp, 14.sp, t),
+                color = Gray,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+
+            // Крупный текст капчи / номера (например, 721BG04)
             Text(
                 text = ticket.customCaption,
-                
-                fontSize = lerp(14.sp, 16.sp, t),
+                fontSize = lerp(18.sp, 24.sp, t),
                 color = Color.Black,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 24.dp, start = 16.dp, end = 16.dp),
+                modifier = Modifier.padding(top = 8.dp, start = 16.dp, end = 16.dp),
             )
 
+            // Дата и сумма
             Column(
-                Modifier.padding(top = 16.dp),
+                Modifier.padding(top = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
@@ -308,6 +321,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
             Spacer(Modifier.weight(1f))
 
+            // Нижние кнопки (Квитанция / Поделиться)
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 24.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
