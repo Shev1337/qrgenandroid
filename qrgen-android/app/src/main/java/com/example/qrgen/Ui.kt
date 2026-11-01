@@ -259,7 +259,11 @@ private fun HomeScreen(
             )
 
             IconButton(
-                onClick = onScanClick,
+                onClick = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                    onScanClick()
+                },
                 modifier = Modifier
                     .size(56.dp)
                     .background(Color(0xFFF2F2F7), RoundedCornerShape(14.dp))
@@ -453,7 +457,7 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
     var expanded by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
-    var drag by remember { mutableStateOf(0f) }
+    var drag by remember { mutableFloatStateOf(0f) }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Backdrop)) {
         val full = maxHeight
