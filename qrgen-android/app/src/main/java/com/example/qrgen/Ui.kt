@@ -1,11 +1,24 @@
 package com.example.qrgen
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.OptIn
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
@@ -27,13 +40,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Receipt
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,6 +60,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -52,6 +71,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
@@ -61,16 +81,23 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.common.InputImage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 private val Backdrop = Color(0xFFD9DBE0)
 private val Gray = Color(0xFF737373)
@@ -90,6 +117,22 @@ fun TicketApp(vm: TicketViewModel = viewModel()) {
     val state = vm.state
     var inputLink by remember { mutableStateOf("https://avtobys.kz") }
     var inputCaption by remember { mutableStateOf("721BG04") }
+    var inputTitle by remember { mutableStateOf("") }
+    var showScanner by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasCameraPermission = granted
+        if (granted) showScanner = true
+    }
 
     Box(Modifier.fillMaxSize().background(Color.White)) {
         HomeScreen(
@@ -99,10 +142,73 @@ fun TicketApp(vm: TicketViewModel = viewModel()) {
             onLinkChange = { inputLink = it },
             caption = inputCaption,
             onCaptionChange = { inputCaption = it },
-            onPay = { vm.payCustom(inputLink, inputCaption) },
+            title = inputTitle,
+            onTitleChange = { inputTitle = it },
+            savedItems = vm.savedItems,
+            onPay = { vm.payCustom(inputLink, inputCaption, inputTitle) },
+            onScanClick = {
+                if (hasCameraPermission) {
+                    showScanner = true
+                } else {
+                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                }
+            },
+            onSelectItem = { item ->
+                vm.touchItem(item)
+                inputLink = item.link
+                inputCaption = item.caption
+                inputTitle = item.title
+                vm.payCustom(item.link, item.caption, item.title)
+            },
+            onDeleteItem = { id -> vm.deleteItem(id) }
         )
+
         if (state is UiState.Ready) {
             TicketOverlay(ticket = state.ticket, onClose = vm::close)
+        }
+
+        if (showScanner) {
+            ScannerView(
+                onScanResult = { scanned ->
+                    showScanner = false
+                    vm.handleScannedLink(scanned, inputCaption, inputTitle) { link, cap, ttl ->
+                        inputLink = link
+                        inputCaption = cap
+                        inputTitle = ttl
+                        vm.payCustom(link, cap, ttl)
+                    }
+                },
+                onClose = { showScanner = false }
+            )
+        }
+
+        // Диалог подтверждения при сканировании уже известного QR-кода
+        vm.pendingMatchItem?.let { matchItem ->
+            AlertDialog(
+                onDismissRequest = { vm.dismissPendingMatch() },
+                title = { Text("Найден сохранённый QR-код") },
+                text = {
+                    val displayCaption = matchItem.caption.ifBlank { matchItem.title.ifBlank { "Без подписи" } }
+                    Text("Применить сохранённую подпись:\n«$displayCaption»?")
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        inputLink = matchItem.link
+                        inputCaption = matchItem.caption
+                        inputTitle = matchItem.title
+                        vm.acceptPendingMatch { link, cap, ttl ->
+                            vm.payCustom(link, cap, ttl)
+                        }
+                    }) {
+                        Text("Использовать", color = Color.Black)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { vm.dismissPendingMatch() }) {
+                        Text("Отмена", color = Color.Gray)
+                    }
+                }
+            )
         }
     }
 }
@@ -115,33 +221,61 @@ private fun HomeScreen(
     onLinkChange: (String) -> Unit,
     caption: String,
     onCaptionChange: (String) -> Unit,
+    title: String,
+    onTitleChange: (String) -> Unit,
+    savedItems: List<SavedItem>,
     onPay: () -> Unit,
+    onScanClick: () -> Unit,
+    onSelectItem: (SavedItem) -> Unit,
+    onDeleteItem: (String) -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
     Column(
-        Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier
+            .fillMaxSize()
+            .systemBarsPadding()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             "Генератор билетов",
-            fontSize = 34.sp,
+            fontSize = 30.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black,
-            modifier = Modifier.padding(top = 24.dp),
+            modifier = Modifier.padding(top = 16.dp),
         )
 
-        Text(
-            "Введите данные для генерации QR-кода и настройки подписи.",
-            color = Gray,
-            fontSize = 15.sp,
-        )
+        // Поле ссылки с кнопкой сканера внутри/рядом
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = link,
+                onValueChange = onLinkChange,
+                label = { Text("Ссылка / Данные для QR-кода") },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(14.dp),
+                singleLine = true
+            )
+
+            IconButton(
+                onClick = onScanClick,
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(Color(0xFFF2F2F7), RoundedCornerShape(14.dp))
+            ) {
+                Icon(Icons.Filled.QrCodeScanner, contentDescription = "Сканировать QR", tint = Color.Black)
+            }
+        }
 
         OutlinedTextField(
-            value = link,
-            onValueChange = onLinkChange,
-            label = { Text("Ссылка / Данные для QR-кода") },
+            value = title,
+            onValueChange = onTitleChange,
+            label = { Text("Текст сверху (необязательно)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
             singleLine = true
@@ -150,7 +284,7 @@ private fun HomeScreen(
         OutlinedTextField(
             value = caption,
             onValueChange = onCaptionChange,
-            label = { Text("Текст под QR-кодом") },
+            label = { Text("Подпись под QR-кодом") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
             singleLine = true
@@ -163,7 +297,7 @@ private fun HomeScreen(
                 onPay()
             },
             enabled = !loading && link.isNotBlank(),
-            modifier = Modifier.fillMaxWidth().height(56.dp),
+            modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color.Black,
@@ -178,6 +312,134 @@ private fun HomeScreen(
             }
         }
         if (error != null) Text(error, color = Warn, fontSize = 14.sp)
+
+        if (savedItems.isNotEmpty()) {
+            Text("Сохранённые", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(top = 4.dp))
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                items(savedItems, key = { it.id }) { item ->
+                    SavedRow(item = item, onClick = { onSelectItem(item) }, onDelete = { onDeleteItem(item.id) })
+                }
+            }
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun SavedRow(item: SavedItem, onClick: () -> Unit, onDelete: () -> Unit) {
+    val primary = item.caption.ifBlank { item.title.ifBlank { item.link } }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFFF2F2F7))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(primary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (primary != item.link) {
+                Text(item.link, fontSize = 12.sp, color = Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = Gray, modifier = Modifier.size(18.sp.value.dp))
+        }
+    }
+}
+
+@Composable
+private fun ScannerView(onScanResult: (String) -> Unit, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var scanned by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(
+            factory = { ctx ->
+                PreviewView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+            update = { previewView ->
+                val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+                cameraProviderFuture.addListener({
+                    val cameraProvider = cameraProviderFuture.get()
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
+
+                    val imageAnalyzer = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                        .also { analysis ->
+                            analysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
+                                processImageProxy(imageProxy) { resultText ->
+                                    if (!scanned) {
+                                        scanned = true
+                                        onScanResult(resultText)
+                                    }
+                                }
+                            }
+                        }
+
+                    try {
+                        cameraProvider.unbindAll()
+                        cameraProvider.bindToLifecycle(
+                            lifecycleOwner,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            preview,
+                            imageAnalyzer
+                        )
+                    } catch (_: Exception) {}
+                }, ContextCompat.getMainExecutor(context))
+            }
+        )
+
+        IconButton(
+            onClick = onClose,
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(16.dp)
+                .align(Alignment.TopEnd)
+                .background(Color.Black.Companion.let { Color.Black.copy(alpha = 0.5f) }, CircleShape)
+        ) {
+            Icon(Icons.Filled.Close, contentDescription = "Закрыть сканер", tint = Color.White)
+        }
+    }
+}
+
+@OptIn(ExperimentalGetImage::class)
+private fun processImageProxy(imageProxy: ImageProxy, onDetected: (String) -> Unit) {
+    val mediaImage = imageProxy.image
+    if (mediaImage != null) {
+        val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+        val scanner = BarcodeScanning.getClient()
+        scanner.process(image)
+            .addOnSuccessListener { barcodes ->
+                for (barcode in barcodes) {
+                    barcode.rawValue?.let { value ->
+                        onDetected(value)
+                        return@addOnSuccessListener
+                    }
+                }
+            }
+            .addOnFailureListener {}
+            .addOnCompleteListener {
+                imageProxy.close()
+            }
+    } else {
+        imageProxy.close()
     }
 }
 
@@ -211,7 +473,6 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
         )
         val t = ((h - collapsedH) / (full - collapsedH)).coerceIn(0f, 1f)
 
-        // Верхний блок с галочкой (как на скрине)
         Column(
             Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -255,7 +516,6 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Ручка шторки
             Box(
                 Modifier
                     .padding(top = 8.dp, bottom = 2.dp)
@@ -264,7 +524,6 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                     .clickable { expanded = !expanded },
             )
 
-            // Заголовок карточки с крестиком
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Покажите QR-код контроллеру",
@@ -280,7 +539,6 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
             Spacer(Modifier.weight(1f))
 
-            // Сам QR-код
             Image(
                 bitmap = qrImage,
                 contentDescription = "QR-код билета",
@@ -290,7 +548,6 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                     .background(Color.White),
             )
 
-            // Мелкая серая надпись под QR-кодом
             Text(
                 text = "Покажите QR-код контроллеру",
                 fontSize = lerp(12.sp, 14.sp, t),
@@ -299,7 +556,6 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                 modifier = Modifier.padding(top = 16.dp),
             )
 
-            // Крупный текст капчи / номера (например, 721BG04)
             Text(
                 text = ticket.customCaption,
                 fontSize = lerp(18.sp, 24.sp, t),
@@ -309,7 +565,6 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
                 modifier = Modifier.padding(top = 8.dp, start = 16.dp, end = 16.dp),
             )
 
-            // Дата и сумма
             Column(
                 Modifier.padding(top = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -321,7 +576,6 @@ private fun TicketOverlay(ticket: Ticket, onClose: () -> Unit) {
 
             Spacer(Modifier.weight(1f))
 
-            // Нижние кнопки (Квитанция / Поделиться)
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 24.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
